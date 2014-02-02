@@ -71,6 +71,38 @@ class GoogleAnalyticsTagTestCase(TagTestCase):
         self.assertTrue("_gaq.push(['_setCustomVar', 5, 'test5', 'qux', 3]);"
                 in r, r)
 
+    def test_transaction(self):
+        context = Context({
+            'google_analytics_transaction': {
+                'transactionId': '1234',
+                'affiliation': 'affilaite',
+                'total': '12.50',
+                'tax': '0.99',
+                'shipping': '1.99',
+                'city': 'Jersey City',
+                'state': 'NJ',
+                'country': 'USA',
+            }
+        })
+        r = GoogleAnalyticsNode().render(context)
+        self.assertTrue("_gaq.push(['_addTrans', '1234', 'affilaite', '12.50'," \
+                        "'0.99', '1.99', 'Jersey City', 'NJ', 'USA']);" in r, r)
+
+    def test_transaction_item(self):
+        context = Context({
+            'google_analytics_transaction': {
+                'transactionId': '1234',
+                'sku': 'THNG001',
+                'name': 'thing',
+                'category': 'things',
+                'price': '50.00',
+                'quantity': '1',
+            }
+        })
+        r = GoogleAnalyticsNode().render(context)
+        self.assertTrue("_gaq.push(['_addItem', '1234', 'THNG001', 'thing', " \
+                        "'things', '50', '1']);" in r, r)
+
     @override_settings(GOOGLE_ANALYTICS_SITE_SPEED=True)
     def test_track_page_load_time(self):
         r = GoogleAnalyticsNode().render(Context())

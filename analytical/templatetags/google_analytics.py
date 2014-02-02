@@ -51,6 +51,12 @@ CUSTOM_VAR_CODE = "_gaq.push(['_setCustomVar', %(index)s, '%(name)s', " \
         "'%(value)s', %(scope)s]);"
 SITE_SPEED_CODE = "_gaq.push(['_trackPageLoadTime']);"
 ANONYMIZE_IP_CODE = "_gaq.push (['_gat._anonymizeIp']);"
+TRANSACTION_CODE = "_gaq.push(['_addTrans', '%(transactionId)s', '%(affiliation)s', "\
+        "'%(total)s', '%(tax)s', '%(shipping)s', '%(city)s', '%(state)s', '%(country)s']);"
+ITEM_CODE = "_gaq.push(['_addItem', '%(transactionId)s', '%(sku)s', '%(name)s', "\
+        "'%(category)s', '%(price)s', '%(quantity)s']);"
+SET_CODE = "_gaq.push(['_set', '%(key)s', '%(value)s']);"
+TRACK_TRANSACTION_CODE = "_gaq.push(['_trackTrans']);"
 DEFAULT_SOURCE = ("'https://ssl' : 'http://www'", "'.google-analytics.com/ga.js'")
 DISPLAY_ADVERTISING_SOURCE = ("'https://' : 'http://'", "'stats.g.doubleclick.net/dc.js'")
 
@@ -80,6 +86,7 @@ class GoogleAnalyticsNode(Node):
         commands = self._get_domain_commands(context)
         commands.extend(self._get_custom_var_commands(context))
         commands.extend(self._get_other_commands(context))
+        commands.extend(self._get_transaction_commands(context))
         if getattr(settings, 'GOOGLE_ANALYTICS_DISPLAY_ADVERTISING', False):
             source = DISPLAY_ADVERTISING_SOURCE
         else:
@@ -122,6 +129,42 @@ class GoogleAnalyticsNode(Node):
             except IndexError:
                 scope = SCOPE_PAGE
             commands.append(CUSTOM_VAR_CODE % locals())
+        return commands
+
+    def _get_transaction_commands(self, context):
+        transaction = context.get('google_analytics_transaction')
+        commands = []
+
+        if not transaction:
+            return commands
+        if 'transactionId' not in transaction or 'total' not in transaction:
+            raise AnalyticalException("transaction tracking requires a total"
+                    " and a transactionId")
+
+        transaction = dict({'affiliation': '', 'tax': '','shipping': '',
+                            'city': '', 'state': '', 'country': ''},
+                           **transaction)
+        commands.append(TRANSACTION_CODE % transaction)
+
+        items = context.get('google_analytics_items', [])
+        for item in items:
+            for required in ('sku', 'name', 'price', 'quantity'):
+                if required not in item:
+                    raise AnalyticalException("item requires %s variable" %
+                                              required)
+            item = dict({'transactionId': '', 'category': ''}, **item)
+            commands.append(ITEM_CODE % item)
+
+        default_local_currency = getattr(settings,
+                                    'GOOGLE_ANALYTICS_ECOMMERCE_CURRENCY_CODE',
+                                    None)
+        local_currency = context.get('google_analytics_currency_code',
+                                     default_local_currency)
+        if local_currency:
+            commands.append(SET_CODE % {'key': 'currencyCode',
+                                        'value': local_currency})
+
+        commands.append(TRACK_TRANSACTION_CODE)
         return commands
 
     def _get_other_commands(self, context):
